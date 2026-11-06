@@ -158,3 +158,42 @@ test('main teacher screens render, remain usable on mobile, and show actual save
     await request.delete(`/api/assessments/${a.id}`);
   }
 });
+
+test('uploaded extraction status and CSV source cannot be silently replaced by conflicting client text', async ({ request }) => {
+  await signIn(request);
+  const cases = [
+    { kind: 'submission', name: 'damaged.pdf', mimeType: 'application/pdf', bytes: Buffer.from('not a readable PDF'), expectedText: '', expectedStatus: 'failed' },
+    { kind: 'submissions', name: 'source.csv', mimeType: 'text/csv', bytes: Buffer.from(`learner_id,response,status\nlearner-01,"${DEMO_SUBMISSIONS[0].response.replaceAll('"', '""')}",received`), expectedText: DEMO_SUBMISSIONS[0].response, expectedStatus: 'received' },
+  ];
+  for (const source of cases) {
+    const uploaded = await request.post('/api/uploads', { multipart: { kind: source.kind, file: { name: source.name, mimeType: source.mimeType, buffer: source.bytes } } });
+    expect(uploaded.ok(), await uploaded.text()).toBeTruthy();
+    const token = (await uploaded.json()).uploadToken as string;
+    const response = await request.post('/api/assessments', { data: {
+      ...DEMO_ASSESSMENT, title: `Source integrity ${source.name} ${Date.now()}`, classId: DEMO_CLASS.id, mode: 'demo', faultInjection: false,
+      submissions: DEMO_SUBMISSIONS.map(s => ({ learnerId: s.learnerId, text: s.learnerId === 'learner-01' ? 'Client replaced the uploaded answer with different text.' : s.response, status: s.status, filename: s.learnerId === 'learner-01' ? source.name : undefined })),
+      uploads: [{ token, kind: source.kind, ...(source.kind === 'submission' ? { learnerId: 'learner-01' } : {}) }],
+    } });
+    // Rejecting a conflict is valid; accepting it must retain authoritative extracted data.
+    if (!response.ok()) {
+      expect(response.status()).toBe(400);
+      expect((await response.json()).error).toMatch(/conflict|source|upload|extract|match/i);
+      continue;
+    }
+    const a = await response.json() as AssessmentDTO;
+    try {
+      const stored = a.submissions.find(s => s.learnerId === 'learner-01')!;
+      expect(stored.sourceText).toBe(source.expectedText);
+      expect(stored.extractionStatus).toBe(source.expectedStatus);
+      expect((await request.post(`/api/assessments/${a.id}/run`, { data: {} })).ok()).toBeTruthy();
+      const marked = await completed(request, a.id);
+      if (source.expectedStatus === 'failed') {
+        const failed = marked.submissions.find(s => s.learnerId === stored.learnerId)!;
+        expect(failed.result).toBeNull();
+        expect(failed.issues.some(issue => issue.blocking && !issue.resolved)).toBe(true);
+      }
+    } finally {
+      await request.delete(`/api/assessments/${a.id}`);
+    }
+  }
+});

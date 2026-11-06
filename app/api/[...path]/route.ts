@@ -73,7 +73,7 @@ async function handle(request:Request,context:{params:Promise<{path:string[]}>})
     if(route==='learner'&&method==='GET') {
       if(user.role!=='learner') throw new HttpError(403,'Open the learner view using a learner account.');
       const submissions=await db.submission.findMany({where:{learnerId:user.id,result:{status:'published'}},include:{learner:true,result:true,assessment:{include:{class:true}}},orderBy:{assessment:{createdAt:'desc'}}});
-      return ok({user:userDTO(user),results:submissions.map(s=>({assessmentTitle:s.assessment.title,className:s.assessment.class.name,subject:s.assessment.class.subject,instructions:s.assessment.instructions,submission:{id:s.id,learnerId:s.learnerId,learner:userDTO(user),sourceText:s.sourceText,extractionStatus:s.extractionStatus,filename:s.filename,result:s.result?resultDTO(s.result):null,issues:[]}}))});
+      return ok({user:userDTO(user),results:submissions.map(s=>({assessmentTitle:s.assessment.title,mode:s.assessment.mode,className:s.assessment.class.name,subject:s.assessment.class.subject,instructions:s.assessment.instructions,submission:{id:s.id,learnerId:s.learnerId,learner:userDTO(user),sourceText:s.sourceText,extractionStatus:s.extractionStatus,filename:s.filename,result:s.result?resultDTO(s.result):null,issues:[]}}))});
     }
     if(path[0]==='results'&&path.length===2&&method==='GET') return ok(resultDTO(await authorizeResult(user,path[1])));
     requireTeacher(user);
@@ -101,7 +101,8 @@ async function handle(request:Request,context:{params:Promise<{path:string[]}>})
       const bytes=Buffer.from(await file.arrayBuffer());const extracted=await extractDocumentText(bytes,filename);const token=randomBytes(32).toString('base64url');
       await db.pendingUpload.deleteMany({where:{createdAt:{lt:new Date(Date.now()-86400000)}}});
       await db.pendingUpload.create({data:{id:hashToken(token),userId:user.id,filename,kind,mimeType:file.type||'application/octet-stream',bytes,text:extracted.text,status:extracted.status}});
-      return ok({filename,...extracted,uploadToken:token,...(kind==='submissions'?parseSubmissionCsv(extracted.text):{}),...(kind==='roster'?{roster:parseRosterCsv(extracted.text)}:{})});
+      const roster=kind==='roster'?parseRosterCsv(extracted.text):null;
+      return ok({filename,...extracted,uploadToken:token,...(kind==='submissions'?parseSubmissionCsv(extracted.text):{}),...(roster?{roster:roster.rows,errors:roster.errors}:{})});
     }
     if(path[0]==='documents'&&path.length===2&&method==='GET') {
       const doc=await db.document.findFirst({where:{id:path[1],assessment:{class:{teacherId:user.id}}}});

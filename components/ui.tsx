@@ -25,5 +25,5 @@ export function ModePill({ mode = "demo" }: { mode?: "demo" | "live" }) {
 }
 
 export function CheckItem({ done, title, description }: { done: boolean; title: string; description: string }) {
-  return <div className="checklist-row"><span className={`check-circle ${done ? "done" : ""}`}>{done ? <Check size={10} /> : <span style={{ fontSize: 8 }}>•</span>}</span><div><strong>{title}</strong><small>{description}</small></div></div>;
+  return <div className="checklist-row"><span className={`check-circle ${done ? "done" : ""}`}>{done ? <Check size={10} /> : <span style={{ fontSize: 10 }}>•</span>}</span><div><strong>{title}</strong><small>{description}</small></div></div>;
 }

@@ -77,6 +77,7 @@ export function calculateGradebook({ scores }: { scores: CriterionScore[] }) {
 
 export function reviewDeterministic(input: { rubric: Criterion[]; scores: CriterionScore[]; sourceText: string; extractionStatus: string; total: number; maxTotal: number; percentage: number }): { valid: boolean; issues: CheckIssue[] } {
   const issues: CheckIssue[] = [];
+  if (![input.total, input.maxTotal, input.percentage].every(Number.isFinite)) issues.push({ code: "incorrect_total", message: "The total, maximum and percentage must all be finite numbers.", blocking: true });
   if (!["received", "blank"].includes(input.extractionStatus)) issues.push({ code: "unmarkable_submission", message: "Missing, unreadable or failed submissions cannot receive a mark.", blocking: true });
   const seen = new Set<string>();
   for (const criterion of input.rubric) {
@@ -92,7 +93,7 @@ export function reviewDeterministic(input: { rubric: Criterion[]; scores: Criter
   }
   if (input.scores.some(score => !seen.has(score.criterionId))) issues.push({ code: "unknown_criterion", message: "The result contains criteria absent from the rubric.", blocking: true });
   const calculated = calculateGradebook({ scores: input.scores });
-  if (Math.abs(calculated.total - input.total) > 0.001 || Math.abs(calculated.maxTotal - input.maxTotal) > 0.001 || Math.abs(calculated.percentage - input.percentage) > 0.001) issues.push({ code: "incorrect_total", message: `Stored total or percentage is incorrect. Expected ${calculated.total}/${calculated.maxTotal} (${calculated.percentage}%).`, blocking: true });
+  if (!issues.some(issue => issue.code === "incorrect_total") && (Math.abs(calculated.total - input.total) > 0.001 || Math.abs(calculated.maxTotal - input.maxTotal) > 0.001 || Math.abs(calculated.percentage - input.percentage) > 0.001)) issues.push({ code: "incorrect_total", message: `Stored total or percentage is incorrect. Expected ${calculated.total}/${calculated.maxTotal} (${calculated.percentage}%).`, blocking: true });
   return { valid: !issues.some(issue => issue.blocking), issues };
 }
 

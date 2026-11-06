@@ -19,7 +19,7 @@ export function validateInput(input: z.infer<typeof assessmentInputSchema>) {
   }
   if (input.mode === 'live' && !process.env.LLM_API_KEY) issues.push({code:'provider_missing',message:'Live mode requires LLM_API_KEY and LLM_MODEL on the server. Demo results will never be substituted.',blocking:true});
   if (input.mode === 'live' && input.faultInjection) issues.push({code:'fault_mode',message:'Fault injection is available only in the labelled demo mode.',blocking:true});
-  if (!input.submissions.length && !input.uploads?.length) issues.push({code:'missing_submissions',message:'Add at least one submission. Unprovided learners will be marked missing, without a zero.',blocking:true});
+  if ((!input.submissions.length || input.submissions.every(s=>s.status==='missing')) && !input.uploads?.some(u=>['submission','submissions'].includes(u.kind))) issues.push({code:'missing_submissions',message:'Add at least one submission. Unprovided learners will be marked missing, without a zero.',blocking:true});
   const seen = new Set<string>();
   for (const s of input.submissions) {
     if (seen.has(s.learnerId)) issues.push({code:'duplicate_upload',message:`Duplicate upload for ${s.learnerId}; the first submission is retained.`,blocking:false});

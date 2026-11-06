@@ -91,6 +91,8 @@ test('review catches missing criteria, fabricated evidence and incorrect arithme
   assert.equal(missing.valid, false);
   const invented = tools.reviewDeterministic({ rubric, scores, sourceText: 'She collected branches.', extractionStatus: 'received', total: 10, maxTotal: 10, percentage: 100 });
   assert.equal(invented.valid, false);
+  const nonFinite = tools.reviewDeterministic({ rubric, scores, sourceText: 'working together', extractionStatus: 'received', total: Number.NaN, maxTotal: 10, percentage: Number.POSITIVE_INFINITY });
+  assert.equal(nonFinite.valid, false);
 });
 
 test('untrusted learner text cannot invoke tools or bypass argument validation', async () => {

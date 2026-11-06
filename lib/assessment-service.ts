@@ -22,12 +22,21 @@ export async function createAssessment(user: User, input: z.infer<typeof assessm
     if (spec.kind==='submissions') {
       const parsed = parseSubmissionCsv(upload.text);
       if(parsed.errors.length) throw new HttpError(400,parsed.errors.join(' '));
+      const retained=parsed.rows.filter((row,index)=>parsed.rows.findIndex(other=>other.learnerId===row.learnerId)===index);
+      for(const row of retained) {
+        const supplied=submissions.filter(s=>s.learnerId===row.learnerId);
+        if(supplied.some(s=>s.text!==row.response || (s.status??(s.text.trim()?'received':'missing'))!==row.status)) throw new HttpError(400,'Pasted submissions conflict with the uploaded CSV. Remove the file before editing imported responses.');
+        for(let i=submissions.length-1;i>=0;i--) if(submissions[i].learnerId===row.learnerId) submissions.splice(i,1);
+      }
       submissions.push(...parsed.rows.map(r=>({learnerId:r.learnerId,text:r.response,status:r.status,filename:upload.filename})));
     }
     if (spec.kind==='submission') {
       if (!spec.learnerId) throw new HttpError(400,'Select the learner for each uploaded submission.');
-      const existing = submissions.find(s=>s.learnerId===spec.learnerId && s.filename===upload.filename);
-      if (!existing) submissions.push({learnerId:spec.learnerId,text:upload.text,status:upload.status==='readable'?'received':upload.status==='blank'?'blank':upload.status==='unreadable'?'unreadable':'failed',filename:upload.filename});
+      const canonical={learnerId:spec.learnerId,text:upload.text,status:upload.status==='readable'?'received' as const:upload.status==='blank'?'blank' as const:upload.status==='unreadable'?'unreadable' as const:'failed' as const,filename:upload.filename};
+      const supplied=submissions.filter(s=>s.learnerId===spec.learnerId);
+      if(supplied.some(s=>s.text!==canonical.text || (s.status??(s.text.trim()?'received':'missing'))!==canonical.status)) throw new HttpError(400,'Pasted text conflicts with the source upload. Remove the file before supplying a replacement response; unreadable extraction cannot be bypassed.');
+      for(let i=submissions.length-1;i>=0;i--) if(submissions[i].learnerId===spec.learnerId) submissions.splice(i,1);
+      submissions.push(canonical);
     }
     if(spec.kind==='roster') {
       const roster=parseRosterCsv(upload.text);
