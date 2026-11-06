@@ -1,0 +1,198 @@
+generator client {
+  provider = "prisma-client-js"
+}
+datasource db {
+  provider = "sqlite"
+  url = env("DATABASE_URL")
+}
+model User {
+  id String @id @default(cuid())
+  name String
+  email String @unique
+  passwordHash String
+  role String
+  classId String?
+  class Classroom? @relation("Learners", fields: [classId], references: [id])
+  classes Classroom[] @relation("Teacher")
+  sessions Session[]
+  submissions Submission[]
+  audits AuditLog[]
+}
+model Session {
+  id String @id
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+}
+model Classroom {
+  id String @id @default(cuid())
+  name String
+  subject String
+  teacherId String
+  teacher User @relation("Teacher", fields: [teacherId], references: [id])
+  learners User[] @relation("Learners")
+  assessments Assessment[]
+}
+model Assessment {
+  id String @id @default(cuid())
+  title String
+  classId String
+  class Classroom @relation(fields: [classId], references: [id])
+  goal String
+  instructions String
+  rubricText String
+  feedbackPreferences String @default("")
+  mode String @default("demo")
+  faultInjection Boolean @default(false)
+  status String @default("draft")
+  rubricJson String @default("[]")
+  reportJson String @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  submissions Submission[]
+  documents Document[]
+  runs Run[]
+  issues Issue[]
+  audits AuditLog[]
+}
+model Document {
+  id String @id @default(cuid())
+  assessmentId String
+  assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  kind String
+  learnerId String?
+  filename String
+  mimeType String
+  bytes Bytes
+  text String @default("")
+  status String
+  hash String
+  createdAt DateTime @default(now())
+}
+model PendingUpload {
+  id String @id
+  userId String
+  filename String
+  kind String
+  mimeType String
+  bytes Bytes
+  text String
+  status String
+  createdAt DateTime @default(now())
+}
+model Submission {
+  id String @id @default(cuid())
+  assessmentId String
+  assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  learnerId String
+  learner User @relation(fields: [learnerId], references: [id])
+  sourceText String @default("")
+  extractionStatus String @default("received")
+  filename String?
+  result Result?
+  issues Issue[]
+  @@unique([assessmentId, learnerId])
+}
+model Result {
+  id String @id @default(cuid())
+  submissionId String @unique
+  submission Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  scoresJson String
+  feedback String
+  total Float
+  maxTotal Float
+  percentage Float
+  status String @default("draft")
+  reviewerFlagsJson String @default("[]")
+  teacherEdited Boolean @default(false)
+  version Int @default(1)
+  approvedAt DateTime?
+  publishedAt DateTime?
+  updatedAt DateTime @updatedAt
+  versions OutputVersion[]
+}
+model OutputVersion {
+  id String @id @default(cuid())
+  resultId String
+  result Result @relation(fields: [resultId], references: [id], onDelete: Cascade)
+  version Int
+  payloadJson String
+  source String
+  createdAt DateTime @default(now())
+  @@unique([resultId, version])
+}
+model Run {
+  id String @id @default(cuid())
+  assessmentId String
+  assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  status String @default("queued")
+  stage String @default("Goal")
+  planJson String @default("[]")
+  toolCount Int @default(0)
+  modelCalls Int @default(0)
+  error String?
+  startedAt DateTime @default(now())
+  finishedAt DateTime?
+  tasks RunTask[]
+  events ActivityEvent[]
+  tools ToolExecution[]
+  issues Issue[]
+}
+model RunTask {
+  id String @id @default(cuid())
+  runId String
+  run Run @relation(fields: [runId], references: [id], onDelete: Cascade)
+  key String
+  title String
+  status String @default("pending")
+  attempts Int @default(0)
+  dataJson String @default("{}")
+  error String?
+  @@unique([runId, key])
+}
+model ToolExecution {
+  id String @id @default(cuid())
+  runId String
+  run Run @relation(fields: [runId], references: [id], onDelete: Cascade)
+  tool String
+  status String
+  inputSummary String
+  outputJson String @default("{}")
+  durationMs Int @default(0)
+  createdAt DateTime @default(now())
+}
+model ActivityEvent {
+  id String @id @default(cuid())
+  runId String
+  run Run @relation(fields: [runId], references: [id], onDelete: Cascade)
+  stage String
+  level String @default("info")
+  message String
+  detail String @default("")
+  createdAt DateTime @default(now())
+}
+model Issue {
+  id String @id @default(cuid())
+  assessmentId String
+  assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  runId String?
+  run Run? @relation(fields: [runId], references: [id], onDelete: Cascade)
+  submissionId String?
+  submission Submission? @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  code String
+  message String
+  blocking Boolean @default(false)
+  resolved Boolean @default(false)
+  resolution String?
+  createdAt DateTime @default(now())
+}
+model AuditLog {
+  id String @id @default(cuid())
+  assessmentId String
+  assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  userId String
+  user User @relation(fields: [userId], references: [id])
+  action String
+  detailJson String
+  createdAt DateTime @default(now())
+}

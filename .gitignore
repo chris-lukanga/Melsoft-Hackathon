@@ -1,0 +1,12 @@
+node_modules/
+.next/
+.next-e2e/
+.env
+.env.local
+.tools/
+*.db
+*.db-journal
+*.tsbuildinfo
+playwright-report/
+test-results/
+.logs/
